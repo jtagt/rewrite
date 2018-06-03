@@ -131,7 +131,7 @@ class Info:
                 await ctx.send(f"{SUCCESS} Your guild with the ID of: **{server_id}** "
                                f"now has access to Baller commands!")
             else:
-                await ctx.send(f"{WARNING} This command is for patrons who have donate $5 or above only!")
+                await ctx.send(f"{WARNING} This command is for patrons who have donated $5 or above only!")
                 return
             await SettingsDB.get_instance().set_bot_settings(bot_settings)
         else:
