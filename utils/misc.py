@@ -10,29 +10,24 @@ from .visual import Paginator
 def is_owner():
     def predicate(ctx):
         if ctx.message.author.id not in ctx.bot.bot_settings.owners:
-            raise CustomCheckFailure("Not for you :PP")
+            raise CustomCheckFailure("Not for you :P")
         return True
     return commands.check(predicate)
 
 
 def split_str(string, split_at=2000):
-    splitted = []
-    if string:
-        splitted = [string[i:i + split_at] for i in range(0, len(string), split_at)]
-    return splitted
+    return [string[i:i + split_at] for i in range(0, len(string), split_at)] if string else []
 
 
 def cleanup_code(content):
     """Automatically removes code blocks from the code."""
-    if content.startswith('```') and content.endswith('```'):
-        return '\n'.join(content.split('\n')[1:-1])
-    return content.strip('` \n')
+    return content.splitlines()[content.startswith("```"):content.endswith("```")]  # @unazed
 
 
-def get_syntax_error(e):
-    if e.text is None:
-        return '```py\n{0.__class__.__name__}: {0}\n```'.format(e)
-    return '```py\n{0.text}{1:>{0.offset}}\n{2}: {0}```'.format(e, '^', type(e).__name__)
+def get_syntax_error(exc):
+    if exc.text is None:
+        return '```py\n{0.__class__.__name__}: {0}\n```'.format(exc)
+    return '```py\n{0.text}{1:>{0.offset}}\n{2}: {0}```'.format(exc, '^', type(exc).__name__)
 
 
 async def get_lyrics(query, token):
@@ -45,8 +40,8 @@ async def get_lyrics(query, token):
             data = await response.json()
             results = data["response"]["hits"]
 
-        if len(results) < 1:
-            return {"error": f"No results found for \"{query}\""}
+        if not results:
+            return {"error": f'No results found for "{query}"'}
 
         result = results[0]["result"]
         response = await session.get(result["url"])
@@ -75,14 +70,14 @@ class LyricsPaginator(Paginator):
 
     @property
     def embed(self):
-        lower_bound = self.page*self.items_per_page
-        upper_bound = lower_bound+self.items_per_page
+        lower_bound = self.page * self.items_per_page
+        upper_bound = lower_bound + self.items_per_page
         to_display = self.items[lower_bound:upper_bound]
         desc = ""
         for content in to_display:
-            desc += content
+            desc += f"{content}"
         embed = discord.Embed(color=self.color,
-                              description=desc, )
+                              description=desc)
         embed.set_author(name=f"{self.lyrics_data['primary_artist']['name']} - {self.lyrics_data['title']}",
                          icon_url=self.lyrics_data["header_image_url"],
                          url=self.lyrics_data["url"])
