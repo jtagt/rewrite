@@ -233,7 +233,7 @@ class Music:
         else:
             mp.skips.add(ctx.author)
             await ctx.send(f"{SUCCESS} You have voted to skip this song, "
-                           f"`{current_skips-skips_needed}` more skips are needed to skip")
+                           f"`{skips_needed-current_skips}` more skips are needed to skip")
 
     @commands.command(aliases=["jumpto", "jump"])
     @music_check(in_channel=True, playing=True, is_dj=True)

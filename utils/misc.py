@@ -80,7 +80,7 @@ class LyricsPaginator(Paginator):
         to_display = self.items[lower_bound:upper_bound]
         desc = ""
         for content in to_display:
-            desc += f"{content}"
+            desc += content
         embed = discord.Embed(color=self.color,
                               description=desc, )
         embed.set_author(name=f"{self.lyrics_data['primary_artist']['name']} - {self.lyrics_data['title']}",
