@@ -16,14 +16,13 @@ class Bot(commands.AutoShardedBot):
 
     @staticmethod
     def prefix_from(bot, msg):
-        # must be an instance of this bot pls dont use anything else
         prefixes = set()
         if msg.guild:
             prefixes.add(bot.prefix_map.get(msg.guild.id, bot.bot_settings.prefix))
         else:
             prefixes.add(bot.bot_settings.prefix)
         return commands.when_mentioned_or(*prefixes)(bot, msg)
-
+      
     def __init__(self, bot_settings, **kwargs):
         super().__init__(Bot.prefix_from, **kwargs)
         self.logger = logging.getLogger("bot")
@@ -61,14 +60,14 @@ class Bot(commands.AutoShardedBot):
             }
         )
 
-        async for i in prefix_servers:
-            self.prefix_map[i["_id"]] = i["prefix"]
+        async for server in prefix_servers:
+            self.prefix_map[server["_id"]] = server["prefix"]
 
         commands_dir = "commands"
         ext = ".py"
-        for file_name in os.listdir(commands_dir):
-            if file_name.endswith(ext):
-                command_name = file_name[:-len(ext)]
+        for filename in os.listdir(commands_dir):
+            if filename.endswith(ext):
+                command_name = filename[:-len(ext)]
                 self.load_extension(f"{commands_dir}.{command_name}")
 
         self.ready = True
