@@ -4,5 +4,4 @@ websockets==3.4
 aiohttp==2.2.5
 discord.py==1.0.0a1467+g6b75179
 beautifulsoup4==4.6.0
-discord==0.0.2
 yarl<1.2

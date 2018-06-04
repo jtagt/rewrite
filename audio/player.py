@@ -186,15 +186,18 @@ class MusicPlayer(AbstractPlayerEventAdapter):
         topic = f"{NOTES} **Now playing** {self.current}"
         music_channel = await self.get_music_chan()
         tms = await self.tms()
-        if music_channel:
-            try:
-                if tms:
-                    if self.previous_np_msg:
-                        await self.previous_np_msg.delete()
-                    self.previous_np_msg = await music_channel.send(topic)
-                await music_channel.edit(topic=topic)
-            except:
-                pass
+        try:
+            if tms:
+                if self.previous_np_msg:
+                    await self.previous_np_msg.delete()
+
+                if music_channel:
+                        self.previous_np_msg = await music_channel.send(topic)
+                        await music_channel.edit(topic=topic)
+                else:
+                    self.previous_np_msg = await self.ctx.send(topic)
+        except:
+            pass
 
     async def track_end(self, event: TrackEndEvent):
         music_channel = await self.get_music_chan()

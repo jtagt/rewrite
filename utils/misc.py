@@ -19,11 +19,6 @@ def split_str(string, split_at=2000):
     return [string[i:i + split_at] for i in range(0, len(string), split_at)] if string else []
 
 
-def cleanup_code(content):
-    """Automatically removes code blocks from the code."""
-    return content.splitlines()[content.startswith("```"):content.endswith("```")]  # @unazed
-
-
 def get_syntax_error(exc):
     if exc.text is None:
         return '```py\n{0.__class__.__name__}: {0}\n```'.format(exc)
@@ -75,7 +70,7 @@ class LyricsPaginator(Paginator):
         to_display = self.items[lower_bound:upper_bound]
         desc = ""
         for content in to_display:
-            desc += f"{content}"
+            desc += content
         embed = discord.Embed(color=self.color,
                               description=desc)
         embed.set_author(name=f"{self.lyrics_data['primary_artist']['name']} - {self.lyrics_data['title']}",
@@ -83,4 +78,3 @@ class LyricsPaginator(Paginator):
                          url=self.lyrics_data["url"])
         embed.set_footer(text=f"Page: {self.page+1}/{self.pages_needed}")
         return embed
-

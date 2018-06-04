@@ -6,7 +6,7 @@ from contextlib import redirect_stdout
 from discord.ext import commands
 
 from utils.DB import SettingsDB
-from utils.misc import cleanup_code, get_syntax_error, is_owner
+from utils.misc import get_syntax_error, is_owner
 
 
 class Eval(object):
@@ -23,7 +23,6 @@ class Eval(object):
     @commands.command(aliases=["e"])
     @is_owner()
     async def eval(self, ctx, *, code: str):
-        code = cleanup_code(code)
         stdout = io.StringIO()
         result = ""
 

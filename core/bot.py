@@ -34,7 +34,6 @@ class Bot(commands.Bot):
         self.prefix_map = {}
         self.ready = False
         self.mpm = None
-        self.remove_command("help")
 
     @property
     def stats(self):
@@ -80,15 +79,10 @@ class Bot(commands.Bot):
         if self.ready:
             return
 
-        logging.getLogger("magma").setLevel(logging.INFO)
-        logging.getLogger('websockets').setLevel(logging.INFO)
-        logging.getLogger("discord.client").setLevel(logging.WARNING)
-        logging.getLogger("discord.gateway").setLevel(logging.ERROR)
-
         await self.load_everything()
         await self.change_presence(activity=discord.Game(name=self.bot_settings.game))
 
-        self.logger.info("!! Logged in !!")
+        self.logger.info(f"Shard: {self.shard_id}/{self.shard_count} has been loaded!")
         self.ready = True
 
         while True:
@@ -116,9 +110,10 @@ class Bot(commands.Bot):
         if exc_class in exc_table.keys():
             await ctx.send(exc_table[exc_class])
         else:
-            self.logger.error(f"Exception in guild: {ctx.guild.name} | {ctx.guild.id}, shard: {self.shard_id}")
+            if ctx.guild:
+                self.logger.error(f"Exception in guild: {ctx.guild.name} | {ctx.guild.id}, shard: {self.shard_id}")
             await super().on_command_error(ctx, exception)
 
     def run(self, *args, **kwargs):
-        logging.basicConfig(format="%(levelname)s -- %(name)s.%(funcName)s : %(message)s", level=logging.INFO)
+        self.remove_command("help")
         super().run(*args, **kwargs)

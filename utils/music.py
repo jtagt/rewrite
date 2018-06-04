@@ -72,6 +72,7 @@ def music_check(**kwargs):
     in_channel = kwargs.pop("in_channel", False)
     playing = kwargs.pop("playing", False)
     is_dj = kwargs.pop("is_dj", False)
+    is_strict_dj = kwargs.pop("is_strict_dj", False)
     is_donor = kwargs.pop("is_donor", "")
 
     async def predicate(ctx):
@@ -95,7 +96,7 @@ def music_check(**kwargs):
         settings = await SettingsDB.get_instance().get_guild_settings(ctx.guild.id)
         vc = ctx.guild.get_channel(settings.voiceId)
         tc = ctx.guild.get_channel(settings.textId)
-        dj = ctx.guild.get_channel(settings.djroleId)
+        dj = discord.utils.get(ctx.guild.roles, id=settings.djroleId)
 
         link = ctx.bot.mpm.lavalink.get_link(ctx.guild)
         player = link.player
@@ -115,11 +116,10 @@ def music_check(**kwargs):
         voice = ctx.guild.me.voice
         connected_channel = voice.channel if voice else None
 
-        if is_dj and dj and dj not in ctx.author.roles and not ctx.author.guild_permissions.mute_members:
-            if connected_channel and ctx.author in connected_channel.members \
-                    and len(connected_channel.members) > 2:
-                raise CustomCheckFailure(f"{WARNING} You must have the role: `{dj.name}` "
-                                         f"or the mute members permission to use this command!")
+        if is_dj and not (dj in ctx.author.roles or ctx.author.guild_permissions.mute_members):
+            if is_strict_dj or connected_channel and len(connected_channel.members) > 2:
+                raise CustomCheckFailure(f"{WARNING} You must have the DJ role or the mute "
+                                         f"members permission to use this command!")
         return True
 
     return commands.check(predicate)

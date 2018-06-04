@@ -30,8 +30,8 @@ class Settings:
         guild = ctx.guild
         settings = await SettingsDB.get_instance().get_guild_settings(guild.id)
         dj_role = discord.utils.get(guild.roles, id=settings.djroleId)
-        text_chan = discord.utils.get(guild.text_channels, id=settings.textId)
-        voice_chan = discord.utils.get(guild.voice_channels, id=settings.voiceId)
+        text_chan = guild.get_channel(settings.textId)
+        voice_chan = guild.get_channel(settings.voiceId)
 
         dj_role = f"{dj_role.name}" if dj_role else "NONE"
         text_chan = f"{text_chan.name}" if text_chan else "NONE"
@@ -170,7 +170,7 @@ class Settings:
                            f"`{prefix}play, {prefix}stop, {prefix}resume`")
 
     @commands.group(pass_context=True, invoke_without_command=True, case_insensitive=True)
-    @music_check(is_dj=True, is_donor="patrons")
+    @music_check(is_dj=True, is_strict_dj=True, is_donor="patrons")
     async def aliases(self, ctx):
         settings = await SettingsDB.get_instance().get_guild_settings(ctx.guild.id)
         aliases = settings.aliases if settings.aliases else {}
@@ -185,7 +185,7 @@ class Settings:
         await ctx.send(content=f"{NOTES} Music aliases for **{ctx.guild.name}**", embed=embed)
 
     @aliases.command()
-    @music_check(is_dj=True, is_donor="patrons")
+    @music_check(is_dj=True, is_strict_dj=True, is_donor="patrons")
     async def add(self, ctx, alias, *, link):
         settings = await SettingsDB.get_instance().get_guild_settings(ctx.guild.id)
         if not settings.aliases:
@@ -195,7 +195,7 @@ class Settings:
         await ctx.send(f"{SUCCESS} The alias `{alias}` is now pointing to `{link}`. Use `.pl {alias}` to play it")
 
     @aliases.command(aliases=["delete"])
-    @music_check(is_dj=True, is_donor="patrons")
+    @music_check(is_dj=True, is_strict_dj=True, is_donor="patrons")
     async def remove(self, ctx, alias):
         settings = await SettingsDB.get_instance().get_guild_settings(ctx.guild.id)
         if alias not in settings.aliases:
