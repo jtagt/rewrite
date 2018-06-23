@@ -101,7 +101,7 @@ class Music:
             return
 
         desc = ""
-        for i in range(5):
+        for i in range(len(results[:5])):
             desc += f"{i+1}. [{results[i].title}]({results[i].uri})\n"
 
         e = discord.Embed(colour=COLOR, description=desc)
@@ -198,24 +198,40 @@ class Music:
         await ctx.send(f"{SUCCESS} The queue has been cleared")
 
     @commands.command(aliases=["r", "delete"])
-    @music_check(in_channel=True, playing=True, is_dj=True)
+    @music_check(in_channel=True, playing=True)
     async def remove(self, ctx, *positions: int):
+        mp = self.mpm.get_music_player(ctx, False)
+        positions = [*positions]
+        positions.sort(reverse=True)
+        to_remove = []
+
+        settings = await SettingsDB.get_instance().get_guild_settings(ctx.guild.id)
+        dj = discord.utils.get(ctx.guild.roles, id=settings.djroleId)
+        voice = ctx.guild.me.voice
+        connected_channel = voice.channel if voice else None
+        dj_check = dj in ctx.author.roles or ctx.author.guild_permissions.mute_members
+        alone_check = connected_channel and len(connected_channel.members) == 2
+
+        remove_check = dj_check or alone_check
+
         try:
-            pos_len = len(positions)
-            if pos_len == 1:
-                pos = positions[0]
+            for pos in positions:
                 pos -= 1
-                mp = self.mpm.get_music_player(ctx, False)
-                track = mp.remove(pos)
+                track = mp.queue[pos]
+                if track.requester != ctx.author and not remove_check:
+                    await ctx.send(f"{WARNING} Cannot remove {track} since you have not requested it!")
+                    continue
+                to_remove.append(track)
+
+            remove_count = len(to_remove)
+            if remove_count == 1:
+                track = to_remove[0]
+                mp.queue.items.remove(track)
                 await ctx.send(f"{SUCCESS} The track: `{track.track.title}` has been removed")
             else:
-                positions = [*positions]
-                positions.sort(reverse=True)
-                for pos in positions:
-                    pos -= 1
-                    mp = self.mpm.get_music_player(ctx, False)
-                    mp.remove(pos)
-                await ctx.send(f"{SUCCESS} Removed `{pos_len}` entries")
+                for track in to_remove:
+                    mp.queue.items.remove(track)
+                await ctx.send(f"{SUCCESS} Removed `{remove_count}` entries")
         except IndexError:
             await ctx.send(f"{WARNING} The specified position(s) are outside the queue length!")
 
@@ -223,6 +239,10 @@ class Music:
     @music_check(playing=True)
     async def skip(self, ctx):
         mp = self.mpm.get_music_player(ctx, False)
+        if ctx.author in mp.skips and mp.current.requester != ctx.author:
+            await ctx.send(f"{WARNING} You have already voted to skip!")
+            return
+
         listeners = list(filter(lambda m: not (m.bot or m.voice.deaf or m.voice.self_deaf),
                                 ctx.guild.me.voice.channel.members))
         skips_needed = round(len(listeners) * 0.5)
@@ -233,7 +253,7 @@ class Music:
         else:
             mp.skips.add(ctx.author)
             await ctx.send(f"{SUCCESS} You have voted to skip this song, "
-                           f"`{skips_needed-current_skips}` more skips are needed to skip")
+                           f"`{skips_needed-current_skips-1}` more skips are needed to skip")
 
     @commands.command(aliases=["jumpto", "jump"])
     @music_check(in_channel=True, playing=True, is_dj=True)
@@ -242,7 +262,7 @@ class Music:
         await mp.skip_to(pos-1)
         await ctx.send(f"{SUCCESS} The current song has been skipped to position: {pos}")
 
-    @commands.command(aliases=["fskip", "modskip"])
+    @commands.command(aliases=["fs", "fskip", "modskip"])
     @music_check(in_channel=True, playing=True, is_dj=True)
     async def forceskip(self, ctx):
         mp = self.mpm.get_music_player(ctx, False)

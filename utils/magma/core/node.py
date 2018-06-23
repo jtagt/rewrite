@@ -48,12 +48,14 @@ class Node:
     def __init__(self, lavalink, name, uri, rest_uri, headers):
         self.name = name
         self.lavalink = lavalink
+        self.links = {}
         self.uri = uri
         self.rest_uri = rest_uri
         self.headers = headers
-        self.available = False
         self.stats = None
         self.ws = None
+        self.available = False
+        self.closing = False
 
     async def _connect(self, try_=0):
         try:
@@ -69,22 +71,55 @@ class Node:
     async def connect(self):
         await self._connect()
         await self.on_open()
-        self.lavalink.loop.create_task(self.listen())
+        asyncio.ensure_future(self.listen())
+        asyncio.ensure_future(self.ping())
+
+    async def disconnect(self):
+        logger.info(f"Closing websocket connection for node: {self.name}")
+        self.closing = True
+        await self.ws.close()
+
+    async def ping(self):
+        """
+        **THIS IS VERY IMPORTANT**
+
+        Lavalink will sometimes fail to recognize the client connection if
+        a ping is not sent frequently. Websockets sends by default, a ping
+        every 5-6 seconds, but this is not enough to maintain the connection.
+
+        This is likely due to the deprecated ws draft: RFC 6455
+        """
+        try:
+            while True:
+                await self.ws.ping()
+                await asyncio.sleep(2)
+        except websockets.ConnectionClosed as e:
+            logger.warning(f"Connection to `{self.name}` was closed! Reason: {e.code}, {e.reason}")
+            self.available = False
+            if self.closing:
+                await self.on_close(e.code, e.reason)
+                return
+
+            try:
+                logger.info(f"Attempting to reconnect `{self.name}`")
+                await self.connect()
+            except NodeException:
+                await self.on_close(e.code, e.reason)
 
     async def listen(self):
         try:
-            while self.ws.open:
+            while True:
                 msg = await self.ws.recv()
                 await self.on_message(json.loads(msg))
-        except websockets.ConnectionClosed as e:
-            await self.on_close(e.code, e.reason)
+        except websockets.ConnectionClosed:
+            pass  # ping() handles this for us, no need to hear it twice..
 
     async def on_open(self):
-        self.available = True
         await self.lavalink.load_balancer.on_node_connect(self)
+        self.available = True
 
     async def on_close(self, code, reason):
-        self.available = False
+        self.closing = False
         if not reason:
             reason = "<no reason given>"
 
@@ -113,7 +148,8 @@ class Node:
         if not self.ws or not self.ws.open:
             try:
                 await self.connect()
-            except:
+            except NodeException:
+                self.available = False
                 raise NodeException("Websocket is not ready, cannot send message")
         await self.ws.send(json.dumps(msg))
 
@@ -127,7 +163,11 @@ class Node:
 
     async def handle_event(self, msg):
         # Lavalink sends us track end event types
-        player = self.lavalink.get_link(msg.get("guildId")).player
+        link = self.lavalink.get_link(msg.get("guildId"))
+        if not link:
+            return  # the link got destroyed
+
+        player = link.player
         event = None
         event_type = msg.get("type")
 

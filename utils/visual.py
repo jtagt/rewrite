@@ -22,7 +22,7 @@ class Paginator:
         self.items = kwargs.pop("items")
         self.items_per_page = kwargs.pop("items_per_page", 10)
         self.color = kwargs.pop("color", COLOR)
-        self.timeout = kwargs.pop("timeout", 180.0)
+        self.timeout = kwargs.pop("timeout", 60.0)
         self.page = kwargs.pop("page", 0)
         self.bot = self.ctx.bot
         self.msg = None
@@ -80,4 +80,4 @@ class Paginator:
                 await self.msg.remove_reaction(reaction.emoji, user)
 
             except discord.Forbidden:
-                pass
+                break

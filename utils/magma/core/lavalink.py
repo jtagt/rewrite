@@ -36,11 +36,11 @@ class Lavalink:
 
     @property
     def playing_guilds(self):
-        count = 0
-        for node in self.nodes.values():
-            if node.stats and node.stats.playing_players:
-                count += node.stats.playing_players
-        return count
+        return {name: node.stats.playing_players for name, node in self.nodes.items()}
+
+    @property
+    def total_playing_guilds(self):
+        return sum(self.playing_guilds.values())
 
     async def on_socket_response(self, data):
         if not data.get("t") in ("VOICE_SERVER_UPDATE", "VOICE_STATE_UPDATE"):
@@ -172,9 +172,7 @@ class Link:
         :return: A Node
         """
         if select_if_absent and not self.node:
-            self.node = await self.lavalink.get_best_node()
-            if self.player:
-                await self.player.node_changed()
+            await self.change_node(await self.lavalink.get_best_node())
         return self.node
 
     async def change_node(self, node):
@@ -185,10 +183,12 @@ class Link:
         :return:
         """
         self.node = node
+        self.node.links[self.guild.id] = self
         if self.last_voice_update:
             await node.send(self.last_voice_update)
+        if self.player:
             await self.player.node_changed()
-
+    
     async def connect(self, channel):
         """
         Connect to a voice channel
@@ -239,3 +239,9 @@ class Link:
 
         self.set_state(State.DISCONNECTING)
         await self.bot._connection._get_websocket(self.guild.id).send_as_json(payload)
+
+    async def destroy(self):
+        if self._player:
+            await self._player.destroy()
+        self.lavalink.links.pop(self.guild.id)
+        self.node.links.pop(self.guild.id)

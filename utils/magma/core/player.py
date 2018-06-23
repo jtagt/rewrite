@@ -42,7 +42,7 @@ class Player:
         # There is a delay between each update so we gotta do some calculations
         # btw this is in fucking milliseconds
         if not self.paused:
-            diff = round(time()*1000) - self.update_time
+            diff = round((time()-self.update_time)*1000)
             return min(self._position + diff, self.current.duration)
         return min(self._position, self.current.duration)
 
@@ -52,7 +52,7 @@ class Player:
         self._position = -1
 
     async def provide_state(self, state):
-        self.update_time = state["time"]
+        self.update_time = time()
         if "position" in state:
             self._position = state["position"]
             return
@@ -151,9 +151,22 @@ class Player:
         node = await self.link.get_node(True)
         await node.send(payload)
 
+    async def destroy(self):
+        """
+        Sends a request to the Lavalink node to destroy the player and reset
+        :return:
+        """
+        payload = {
+            "op": "destroy",
+            "guildId": str(self.link.guild.id),
+        }
+
+        node = await self.link.get_node(True)
+        await node.send(payload)
+
     async def node_changed(self):
         if self.current:
-            await self.play(self.current, self.position)
+            await self.play(self.current, self._position)
 
     async def trigger_event(self, event):
         await Player.internal_event_adapter.on_event(event)

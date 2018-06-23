@@ -34,5 +34,9 @@ class SettingsDB:
             return GuildSettings(document.get("_id"), **document)
         return GuildSettings(id)
 
+    async def remove_guild_settings(self, id):
+        return await self.guild_settings_col.delete_one({"_id": id})
+
     async def set_guild_settings(self, settings):
         return await self.guild_settings_col.replace_one({"_id": settings._id}, settings.__dict__, True)
+

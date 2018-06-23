@@ -25,9 +25,10 @@ class Bot(commands.Bot):
             prefixes.add(bot.bot_settings.prefix)
         return commands.when_mentioned_or(*prefixes)(bot, msg)
 
-    def __init__(self, bot_settings, shard_stats, **kwargs):
+    def __init__(self, bot_settings, **kwargs):
+        self.shard_stats = kwargs.pop("shard_stats")
+        self.command_queues = kwargs.pop("command_queues")
         super().__init__(Bot.prefix_from, **kwargs)
-        self.shard_stats = shard_stats
         self.logger = logging.getLogger("bot")
         self.start_time = datetime.now()
         self.bot_settings = bot_settings
@@ -45,6 +46,7 @@ class Bot(commands.Bot):
         await self.load_all_nodes()
         await self.load_all_prefixes()
         self.load_all_commands()
+        self.loop.create_task(self.load_command_queue())
 
     async def load_all_nodes(self):
         self.mpm = MusicPlayerManager(self)
@@ -75,6 +77,11 @@ class Bot(commands.Bot):
                 command_name = file_name[:-len(ext)]
                 self.load_extension(f"{commands_dir}.{command_name}")
 
+    async def load_command_queue(self):
+        in_queue = None
+        out_queue = None
+        self.command_queues[self.shard_id] = [in_queue, out_queue]
+
     async def on_ready(self):
         if self.ready:
             return
@@ -96,7 +103,8 @@ class Bot(commands.Bot):
 
     async def on_command_error(self, ctx, exception):
         exc_class = exception.__class__
-        if exc_class in (commands.CommandNotFound, commands.NotOwner, discord.Forbidden):
+        if exc_class in (commands.CommandNotFound, commands.NotOwner, discord.Forbidden) \
+                or exc_class is commands.CommandInvokeError and exception.original.__class__ is discord.Forbidden:
             return
 
         exc_table = {
@@ -113,6 +121,22 @@ class Bot(commands.Bot):
             if ctx.guild:
                 self.logger.error(f"Exception in guild: {ctx.guild.name} | {ctx.guild.id}, shard: {self.shard_id}")
             await super().on_command_error(ctx, exception)
+
+    async def on_guild_remove(self, guild):
+        await SettingsDB.get_instance().remove_guild_settings(guild.id)
+        self.prefix_map.pop(guild.id, None)
+        if guild.id in self.mpm.music_players:
+            self.mpm.music_players.pop(guild.id)
+        if guild.id in self.mpm.lavalink.links:
+            await self.mpm.lavalink.links[guild.id].destroy()
+
+    async def on_guild_join(self, guild):
+        channel = guild.system_channel or \
+                  next(chan for chan in guild.text_channels if chan.permissions_for(guild.me).send_messages)
+
+        await channel.send(f":tada: Thanks for inviting me to the server! You can get a quick start guide by typing "
+                           f"`.help`.\nIf you need any support, you are welcome to join our server by clicking on the "
+                           f"link in `.invite`")
 
     def run(self, *args, **kwargs):
         self.remove_command("help")

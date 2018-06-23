@@ -46,7 +46,7 @@ class Info:
 
     @commands.command(aliases=["botinfo", "stats"])
     async def info(self, ctx):
-        playing_guilds = self.bot.mpm.lavalink.playing_guilds
+        playing_guilds = self.bot.mpm.lavalink.total_playing_guilds
         guild_count = sum(val["guild_count"] for val in self.bot.shard_stats.values())
         embed = discord.Embed(title="Himebot - Statistics", colour=COLOR)
         embed.set_thumbnail(url=self.bot.user.avatar_url)
@@ -95,7 +95,7 @@ class Info:
                     value="For the best rap music on YouTube check out Rap Town! "
                           "[YouTube channel](https://www.youtube.com/c/raptown) | "
                           "[Music Discord server](https://discord.gg/thetown)")
-        e.add_field(name="Scorchy - Himebot's artist!",
+        embed.add_field(name="Scorchy - Himebot's artist!",
                     value="Scorchy is the artist for Hime's avatar, "
                           "you could check out some of his work on his [Twitter](https://twitter.com/AyyScorchy)")
         await ctx.send(embed=embed)
@@ -123,7 +123,7 @@ class Info:
                 return
 
             if CONTRIBUTOR_ROLE_ID in roles:
-                bot_settings.contributors[ctx.author.id] = server_id
+                bot_settings.contributors[str(ctx.author.id)] = server_id
                 await ctx.send(f"{SUCCESS} Your guild with the ID of: **{server_id}** "
                                f"now has access to Contributor commands!")
             elif BALLER_ROLE_ID in roles:

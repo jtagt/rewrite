@@ -8,15 +8,15 @@ import uvloop
 
 from core.bot import Bot
 from utils.DB import SettingsDB
-from utils.magma.core import node
 
 
-def start_shard(controller, shard_stats, shard_id):
+def start_shard(controller, shard_id, **kwargs):
     logging.basicConfig(format="%(levelname)s -- %(name)s.%(funcName)s : %(message)s", level=logging.INFO)
     logging.getLogger("discord").setLevel(logging.ERROR)
+
     logging.getLogger("shard_controller").info(f"Starting shard: {shard_id} in process: {mp.current_process().pid}")
 
-    bot = Bot(controller.bot_settings, shard_stats, shard_id=shard_id, shard_count=controller.shard_count)
+    bot = Bot(controller.bot_settings, shard_id=shard_id, shard_count=controller.shard_count, **kwargs)
     bot.run(controller.bot_settings.token)
 
 
@@ -30,8 +30,10 @@ class ShardController:
         logging.getLogger("shard_controller").info(f"Starting shards in parent process: {mp.current_process().pid}")
 
         shard_stats = manager.dict()
-        for shard in self.shard_ids:
-            proc = mp.Process(target=start_shard, args=(self, shard_stats, shard))
+        command_queues = manager.dict()
+        for shard_id in self.shard_ids:
+            proc = mp.Process(target=start_shard, args=(self, shard_id),
+                              kwargs={"shard_stats": shard_stats, "command_queues": command_queues})
             proc.start()
             proc.join(5)
         signal.pause()
@@ -39,8 +41,6 @@ class ShardController:
 
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 loop = asyncio.get_event_loop()
-node.tries = 1
-node.timeout = 2
 
 
 if __name__ == "__main__":
@@ -50,7 +50,8 @@ if __name__ == "__main__":
 
     db = SettingsDB.get_instance()
     bot_settings = loop.run_until_complete(db.get_bot_settings())
-    shards = 1#44
+    shards = 160
 
     shard_controller = ShardController(bot_settings, (*range(shards),), shards)
+    #start_shard(shard_controller, 0, shard_stats={}, command_queues={})
     shard_controller.start_shards(mp_manager)

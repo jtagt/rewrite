@@ -147,6 +147,8 @@ class MusicPlayer(AbstractPlayerEventAdapter):
     async def stop(self):
         self.current = None
         self.paused = False
+        self.autoplaying = False
+
         if self.player.current:
             self.player.current.user_data = UserData.STOPPED
             await self.player.stop()
@@ -215,8 +217,12 @@ class MusicPlayer(AbstractPlayerEventAdapter):
             elif settings.autoplay != "NONE" and not self.autoplaying:
                 await self.load_autoplay(settings.autoplay)
                 tms = await self.tms()
-                if music_channel and tms:
-                    await music_channel.send(f"{NOTES} **Added** the autoplay playlist to the queue")
+                if tms:
+                    to_send = f"{NOTES} **Added** the autoplay playlist to the queue"
+                    if music_channel:
+                        await music_channel.send(to_send)
+                    else:
+                        await self.ctx.send(to_send)
 
         if not self.queue.empty:
             self.current = self.queue.popleft()

@@ -9,7 +9,7 @@ from utils.DB import SettingsDB
 from utils.misc import get_syntax_error, is_owner
 
 
-class Eval(object):
+class Eval:
     def __init__(self, bot):
         self.bot = bot
         self.last_result = None
