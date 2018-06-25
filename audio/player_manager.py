@@ -5,19 +5,20 @@ from .player import MusicPlayer
 
 
 class MusicPlayerManager:
-    def __init__(self, bot):
+    def __init__(self, bot, lavalink=None):
         self.bot = bot
-        self.lavalink = Lavalink(bot)
+        self.lavalink = lavalink or Lavalink(bot.user.id, bot.shard_count)
         self.music_players = {}
         self.timeout_tasks = {}
 
         self.bot.add_listener(self.on_voice_state_update)
+        self.bot.add_listener(self.lavalink.on_socket_response)
 
     def get_music_player(self, ctx, select_if_absent=True):
         if not select_if_absent or ctx.guild.id in self.music_players:
             return self.music_players.get(ctx.guild.id)
 
-        link = self.lavalink.get_link(ctx.guild)
+        link = self.lavalink.get_link(ctx.guild, self.bot)
         mp = MusicPlayer(ctx, link)
         self.music_players[ctx.guild.id] = mp
         return mp

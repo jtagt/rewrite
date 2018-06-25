@@ -25,6 +25,8 @@ class Bot(commands.Bot):
             prefixes.add(bot.bot_settings.prefix)
         return commands.when_mentioned_or(*prefixes)(bot, msg)
 
+        # return "_----_----__-_"
+
     def __init__(self, bot_settings, **kwargs):
         self.shard_stats = kwargs.pop("shard_stats")
         self.command_queues = kwargs.pop("command_queues")
@@ -34,7 +36,10 @@ class Bot(commands.Bot):
         self.bot_settings = bot_settings
         self.prefix_map = {}
         self.ready = False
+        self.lavalink = kwargs.get("lavalink")
         self.mpm = None
+
+        self.remove_command("help")
 
     @property
     def stats(self):
@@ -42,14 +47,26 @@ class Bot(commands.Bot):
             "guild_count": len(self.guilds),
         }
 
+    async def load_all_nodes(self):
+        self.mpm = MusicPlayerManager(self)
+        for (node, conf) in self.bot_settings.lavaNodes.items():
+            try:
+                await self.mpm.lavalink.add_node(node, conf["uri"], conf["restUri"], conf["password"])
+            except NodeException as e:
+                self.logger.error(f"{node} - {e.args[0]}")
+
     async def load_everything(self):
-        await self.load_all_nodes()
+        if self.lavalink:
+            self.mpm = MusicPlayerManager(self, self.lavalink)
+        else:
+            await self.load_all_nodes()
+
         await self.load_all_prefixes()
         self.load_all_commands()
         self.loop.create_task(self.load_command_queue())
 
-    async def load_all_nodes(self):
-        self.mpm = MusicPlayerManager(self)
+    async def load_music_player_manager(self):
+        self.mpm = MusicPlayerManager(self, self.lavalink)
         for (node, conf) in self.bot_settings.lavaNodes.items():
             try:
                 await self.mpm.lavalink.add_node(node, conf["uri"], conf["restUri"], conf["password"])
@@ -103,16 +120,18 @@ class Bot(commands.Bot):
 
     async def on_command_error(self, ctx, exception):
         exc_class = exception.__class__
-        if exc_class in (commands.CommandNotFound, commands.NotOwner, discord.Forbidden) \
-                or exc_class is commands.CommandInvokeError and exception.original.__class__ is discord.Forbidden:
+        if exc_class == commands.CommandInvokeError:
+            exception = exception.original
+            exc_class = exception.__class__
+        if exc_class in (commands.CommandNotFound, commands.NotOwner, discord.Forbidden, discord.Forbidden):
             return
 
         exc_table = {
             commands.MissingRequiredArgument: f"{WARNING} The required arguments are missing for this command!",
             commands.NoPrivateMessage: f"{WARNING} This command cannot be used in PM's!",
             commands.BadArgument: f"{WARNING} A bad argument was passed, please check if your arguments are correct!",
-            IllegalAction: f"{WARNING} A node error has occurred: `{getattr(exception, 'msg', None)}`",
-            CustomCheckFailure: getattr(exception, "msg", None) or "None"
+            IllegalAction: f"{WARNING} A node error has occurred: `{getattr(exception, 'msg', None) or getattr(exception, 'args')}`",
+            CustomCheckFailure: getattr(exception, "msg", None) or getattr(exception, 'args')
         }
 
         if exc_class in exc_table.keys():
@@ -138,6 +157,3 @@ class Bot(commands.Bot):
                            f"`.help`.\nIf you need any support, you are welcome to join our server by clicking on the "
                            f"link in `.invite`")
 
-    def run(self, *args, **kwargs):
-        self.remove_command("help")
-        super().run(*args, **kwargs)

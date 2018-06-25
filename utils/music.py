@@ -77,7 +77,7 @@ def music_check(**kwargs):
 
     async def predicate(ctx):
         if ctx.author.id in ctx.bot.bot_settings.owners:
-            return True
+            pass#return True
 
         if not ctx.guild:
             raise CustomCheckFailure(f"{WARNING} This command is guild only")
@@ -98,7 +98,7 @@ def music_check(**kwargs):
         tc = ctx.guild.get_channel(settings.textId)
         dj = discord.utils.get(ctx.guild.roles, id=settings.djroleId)
 
-        link = ctx.bot.mpm.lavalink.get_link(ctx.guild)
+        link = ctx.bot.mpm.lavalink.get_link(ctx.guild, ctx.bot)
         player = link.player
 
         if in_channel:

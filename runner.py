@@ -3,6 +3,7 @@ import asyncio
 import logging
 import multiprocessing as mp
 import signal
+import sys
 
 import uvloop
 
@@ -50,7 +51,7 @@ if __name__ == "__main__":
 
     db = SettingsDB.get_instance()
     bot_settings = loop.run_until_complete(db.get_bot_settings())
-    shards = 160
+    shards = int(sys.argv[1])
 
     shard_controller = ShardController(bot_settings, (*range(shards),), shards)
     #start_shard(shard_controller, 0, shard_stats={}, command_queues={})

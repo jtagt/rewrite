@@ -2,6 +2,7 @@ import random
 from asyncio import futures
 
 import discord
+from aiohttp import ClientConnectorError
 from discord.ext import commands
 
 from utils.DB import SettingsDB
@@ -63,11 +64,15 @@ class Music:
             settings = await SettingsDB.get_instance().get_guild_settings(ctx.guild.id)
             if settings.aliases and query in settings.aliases:
                 query = settings.aliases[query]
-
-        if query.startswith("http"):
-            results = await mp.link.get_tracks(query)
-        else:
-            results = await mp.link.get_tracks_yt(query)
+        try:
+            if query.startswith("http"):
+                results = await mp.link.get_tracks(query)
+            else:
+                results = await mp.link.get_tracks_yt(query)
+        except ClientConnectorError:
+            await ctx.send(f"{ERROR} No nodes are available! Please notify Himebot's support team."
+                           f" Join Hime's server with `.invite`")
+            return
 
         if not results:
             await ctx.send(f"{WARNING} No results found!")
@@ -194,7 +199,7 @@ class Music:
     @music_check(in_channel=True, playing=True, is_dj=True)
     async def reset(self, ctx):
         mp = self.mpm.get_music_player(ctx, False)
-        mp.clear()
+        mp.clear_queue()
         await ctx.send(f"{SUCCESS} The queue has been cleared")
 
     @commands.command(aliases=["r", "delete"])

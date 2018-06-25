@@ -1,7 +1,4 @@
-uvloop==0.9.1
-motor==1.2.1
-websockets==3.4
-aiohttp==2.2.5
-discord.py==1.0.0a1467+g6b75179
+uvloop==0.10.1
+motor==1.2.2
 beautifulsoup4==4.6.0
-yarl<1.2
+git+https://github.com/Rapptz/discord.py@rewrite#egg=discord.py[voice]

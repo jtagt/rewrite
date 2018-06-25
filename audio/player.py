@@ -107,10 +107,6 @@ class MusicPlayer(AbstractPlayerEventAdapter):
     def shuffle(self):
         self.queue.shuffle()
 
-    def clear(self):
-        self.queue.clear()
-        self.repeat_queue.clear()
-
     def remove(self, to_remove):
         return self.queue.remove(to_remove)
 
@@ -144,15 +140,21 @@ class MusicPlayer(AbstractPlayerEventAdapter):
             return -1
         return self.queue.fair_put(enqueued)
 
-    async def stop(self):
+    def clear_queue(self):
+        self.queue.clear()
+        self.repeat_queue.clear()
+
+    def clear_everything(self):
         self.current = None
         self.paused = False
         self.autoplaying = False
+        self.clear_queue()
 
+    async def stop(self):
+        self.clear_everything()
         if self.player.current:
             self.player.current.user_data = UserData.STOPPED
             await self.player.stop()
-        self.clear()
 
     async def skip(self):
         self.player.current.user_data = UserData.SKIPPED
@@ -251,3 +253,7 @@ class MusicPlayer(AbstractPlayerEventAdapter):
     async def track_stuck(self, event: TrackStuckEvent):
         pass
 
+    async def destroy(self):
+        self.clear_everything()
+        if self.guild.id in self.bot.mpm.music_players:
+            self.bot.mpm.music_players.pop(self.guild.id)

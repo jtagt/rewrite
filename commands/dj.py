@@ -19,7 +19,7 @@ def perm_check():
     return commands.check(predicate)
 
 
-class Settings:
+class DJ:
     def __init__(self, bot):
         self.bot = bot
         self.autoplay_pattern = re.compile("^(https?://)?((www\.)?youtube\.com|youtu\.?be)/.+$")
@@ -205,6 +205,12 @@ class Settings:
         await SettingsDB.get_instance().set_guild_settings(settings)
         await ctx.send(f"{SUCCESS} The alias `{alias}` has been removed")
 
+    @music_check(is_dj=True, is_strict_dj=True, is_donor="patrons")
+    @aliases.command(aliases=["p"])
+    async def purge(self, ctx, limit: int=50):
+        await ctx.channel.purge(limit=limit, check=lambda m: m.author == self.bot.user)
+        await ctx.send(f"{SUCCESS} Purged `{limit}` messages")
+
 
 def setup(bot):
-    bot.add_cog(Settings(bot))
+    bot.add_cog(DJ(bot))
