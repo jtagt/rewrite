@@ -77,7 +77,7 @@ def music_check(**kwargs):
 
     async def predicate(ctx):
         if ctx.author.id in ctx.bot.bot_settings.owners:
-            pass#return True
+            return True
 
         if not ctx.guild:
             raise CustomCheckFailure(f"{WARNING} This command is guild only")

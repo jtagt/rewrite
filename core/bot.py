@@ -18,6 +18,7 @@ class Bot(commands.Bot):
     @staticmethod
     def prefix_from(bot, msg):
         # must be an instance of this bot pls dont use anything else
+        # return "_----_----__-_"
         prefixes = set()
         if msg.guild:
             prefixes.add(bot.prefix_map.get(msg.guild.id, bot.bot_settings.prefix))
@@ -25,18 +26,17 @@ class Bot(commands.Bot):
             prefixes.add(bot.bot_settings.prefix)
         return commands.when_mentioned_or(*prefixes)(bot, msg)
 
-        # return "_----_----__-_"
-
     def __init__(self, bot_settings, **kwargs):
         self.shard_stats = kwargs.pop("shard_stats")
-        self.command_queues = kwargs.pop("command_queues")
+        self.command_queue = kwargs.pop("command_queue")
+        self.shard_cluster = kwargs.get("shard_cluster")
+        self.lavalink = kwargs.get("lavalink")
         super().__init__(Bot.prefix_from, **kwargs)
         self.logger = logging.getLogger("bot")
         self.start_time = datetime.now()
         self.bot_settings = bot_settings
         self.prefix_map = {}
         self.ready = False
-        self.lavalink = kwargs.get("lavalink")
         self.mpm = None
 
         self.remove_command("help")
@@ -63,7 +63,6 @@ class Bot(commands.Bot):
 
         await self.load_all_prefixes()
         self.load_all_commands()
-        self.loop.create_task(self.load_command_queue())
 
     async def load_music_player_manager(self):
         self.mpm = MusicPlayerManager(self, self.lavalink)
@@ -93,11 +92,6 @@ class Bot(commands.Bot):
             if file_name.endswith(ext):
                 command_name = file_name[:-len(ext)]
                 self.load_extension(f"{commands_dir}.{command_name}")
-
-    async def load_command_queue(self):
-        in_queue = None
-        out_queue = None
-        self.command_queues[self.shard_id] = [in_queue, out_queue]
 
     async def on_ready(self):
         if self.ready:

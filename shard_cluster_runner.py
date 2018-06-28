@@ -3,7 +3,7 @@ import asyncio
 import base64
 import logging
 import multiprocessing as mp
-import signal
+import sys
 
 import uvloop
 
@@ -23,11 +23,12 @@ def start_shard_cluster(cluster, **kwargs):
 
 
 class ShardCluster:
-    def __init__(self, shard_ids, controller):
+    def __init__(self, shard_ids, controller, start_delay=5):
         self.shard_ids = shard_ids
         self.controller = controller
         self.user_id = int(base64.b64decode(controller.bot_settings.token.split(".")[0]))
         self.shards = []
+        self.start_delay = start_delay
 
     async def get_lavalink(self):
         lavalink = Lavalink(self.user_id, self.controller.shard_count)  # global variable reference with user_id
@@ -39,34 +40,84 @@ class ShardCluster:
         return lavalink
 
     async def start(self, **kwargs):
+        async def _delayed_start(shard):
+            await shard.start(self.controller.bot_settings.token)
+            await asyncio.sleep(self.start_delay)
+
         tasks = []
-        lavalink = await self.get_lavalink()
+        lavalink = None  # await self.get_lavalink()
         for shard_id in self.shard_ids:
-            bot = Bot(self.controller.bot_settings, shard_id=shard_id, shard_count=self.controller.shard_count, lavalink=lavalink, **kwargs)
+            bot = Bot(self.controller.bot_settings,
+                      shard_id=shard_id,
+                      shard_count=self.controller.shard_count,
+                      lavalink=lavalink,
+                      shard_cluster=self,
+                      **kwargs)
             self.shards.append(bot)
-            tasks.append(bot.start(self.controller.bot_settings.token))
+            tasks.append(_delayed_start(bot))
         await asyncio.gather(*tasks)
 
 
 class ShardController:
-    def __init__(self, bot_settings, shard_ids, shard_count):
+    def __init__(self, bot_settings, shard_ids, shard_count, start_delay=5, shard_p_cluster=4):
         self.bot_settings = bot_settings
         self.shard_ids = shard_ids
         self.shard_count = shard_count
+        self.cluster_processes = {}
+        self.clusters = {}
+        self.start_delay = start_delay
+        self.shard_p_cluster = shard_p_cluster
+        self.commands = {
+            "shutdown": self.shutdown_cluster,
+            "restart": self.restart_cluster,
+            "restart_all": self.restart_all
+        }
 
-    def start_shards(self, manager, shards_p_cluster=3):
+    def shutdown_cluster(self, **kwargs):
+        to_shutdown = kwargs.pop("cluster")
+        process = self.cluster_processes[to_shutdown]
+        logging.getLogger("shard_controller").info(f"Stopping cluster: {to_shutdown} with {process.pid}")
+        process.terminate()
+
+    def start_cluster(self, **kwargs):
+        to_start = kwargs.pop("cluster")
+        cluster = self.clusters[to_start]
+        proc = mp.Process(target=start_shard_cluster, args=(cluster,),
+                          kwargs=kwargs)
+        self.cluster_processes[cluster] = proc
+        logging.getLogger("shard_controller").info(f"Starting cluster: {to_start}")
+        proc.start()
+        proc.join(self.start_delay * self.shard_p_cluster)
+
+    def restart_cluster(self, **kwargs):
+        self.shutdown_cluster(**kwargs)
+        self.start_cluster(**kwargs)
+
+    def restart_all(self, **kwargs):
+        for cluster in self.clusters.keys():
+            self.restart_cluster(cluster=cluster, **kwargs)
+
+    def start_shards(self, manager):
         logging.getLogger("shard_controller").info(f"Starting shards in parent process: {mp.current_process().pid}")
 
         shard_stats = manager.dict()
-        command_queues = manager.dict()
+        command_queue = manager.Queue()
+        clusters = [ShardCluster(self.shard_ids[i:i+self.shard_p_cluster], self, self.start_delay)
+                    for i in range(0, self.shard_count, self.shard_p_cluster)]
 
-        clusters = [ShardCluster(self.shard_ids[i:i+shards_p_cluster], self) for i in range(0, self.shard_count, shards_p_cluster)]
         for cluster in clusters:
             proc = mp.Process(target=start_shard_cluster, args=(cluster,),
-                              kwargs={"shard_stats": shard_stats, "command_queues": command_queues})
+                              kwargs={"shard_stats": shard_stats, "command_queue": command_queue})
+            self.cluster_processes[cluster.shard_ids[0]] = proc
+            self.clusters[cluster.shard_ids[0]] = cluster
             proc.start()
-            proc.join(5)
-        signal.pause()
+            proc.join(self.start_delay*self.shard_p_cluster)
+
+        while True:
+            request = command_queue.get()
+            logging.getLogger("shard_controller").info(f"Received command request: {request}")
+            command = self.commands.get(request.pop("action"))
+            command(shard_stats=shard_stats, command_queue=command_queue, **request)
 
 
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
@@ -80,9 +131,8 @@ def main():
 
     db = SettingsDB.get_instance()
     bot_settings = loop.run_until_complete(db.get_bot_settings())
-    shards = 1
-    shard_controller = ShardController(bot_settings, (*range(shards),), shards)
-
+    shards = int(sys.argv[1])
+    shard_controller = ShardController(bot_settings, (*range(shards),), shards, shard_p_cluster=1)
     # start_shard_cluster(ShardCluster([0], shard_controller), shard_stats={}, command_queues={})
     shard_controller.start_shards(mp_manager)
 
