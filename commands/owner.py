@@ -72,10 +72,8 @@ class Owner:
 
     @commands.command()
     @is_owner()
-    async def changepic(self, ctx, *, url: str):
-        with aiohttp.Timeout(10):
-            async with aiohttp.request("get", url) as res:
-                await self.bot.user.edit(avatar=await res.read())
+    async def exception(self, ctx):
+        raise Exception(ctx)
 
 
 def setup(bot):

@@ -206,7 +206,7 @@ class DJ:
         await ctx.send(f"{SUCCESS} The alias `{alias}` has been removed")
 
     @music_check(is_dj=True, is_strict_dj=True, is_donor="patrons")
-    @aliases.command(aliases=["p"])
+    @aliases.command(aliases=["pg"])
     async def purge(self, ctx, limit: int=50):
         await ctx.channel.purge(limit=limit, check=lambda m: m.author == self.bot.user)
         await ctx.send(f"{SUCCESS} Purged `{limit}` messages")

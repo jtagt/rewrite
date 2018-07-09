@@ -1,10 +1,13 @@
 import asyncio
 import logging
 import os
+import sys
+import traceback
 from datetime import datetime
 
 import discord
 from discord.ext import commands
+from raven import Client
 
 from audio.player_manager import MusicPlayerManager
 from utils.DB import SettingsDB
@@ -30,11 +33,13 @@ class Bot(commands.Bot):
         self.shard_stats = kwargs.pop("shard_stats")
         self.command_queue = kwargs.pop("command_queue")
         self.shard_cluster = kwargs.get("shard_cluster")
+        self.lockdown_coro = kwargs.get("lockdown_coro")
         self.lavalink = kwargs.get("lavalink")
         super().__init__(Bot.prefix_from, **kwargs)
         self.logger = logging.getLogger("bot")
         self.start_time = datetime.now()
         self.bot_settings = bot_settings
+        self.sentry = Client(**bot_settings.sentryArgs)
         self.prefix_map = {}
         self.ready = False
         self.mpm = None
@@ -96,13 +101,17 @@ class Bot(commands.Bot):
     async def on_ready(self):
         if self.ready:
             return
+        self.logger.info(f"on_ready(): Shard: {self.shard_id}/{self.shard_count}")
+
+        if self.lockdown_coro:
+            await self.lockdown_coro(self)
+            sys.exit()
 
         await self.load_everything()
         await self.change_presence(activity=discord.Game(name=self.bot_settings.game))
 
         self.logger.info(f"Shard: {self.shard_id}/{self.shard_count} has been loaded!")
         self.ready = True
-
         while True:
             # The first shard number is the identifier
             self.shard_stats[self.shard_id] = self.stats
@@ -112,12 +121,19 @@ class Bot(commands.Bot):
         if not msg.author.bot:
             await self.process_commands(msg)
 
+    async def on_error(self, event_method, *args, **kwargs):
+        exc = sys.exc_info()
+        if exc[0] in (discord.Forbidden,):
+            return
+        await self.loop.run_in_executor(None, self.sentry.captureException, sys.exc_info())
+        await super().on_error(event_method, *args, **kwargs)
+
     async def on_command_error(self, ctx, exception):
         exc_class = exception.__class__
         if exc_class == commands.CommandInvokeError:
             exception = exception.original
             exc_class = exception.__class__
-        if exc_class in (commands.CommandNotFound, commands.NotOwner, discord.Forbidden, discord.Forbidden):
+        if exc_class in (commands.CommandNotFound, commands.NotOwner, discord.Forbidden):
             return
 
         exc_table = {
@@ -132,6 +148,8 @@ class Bot(commands.Bot):
             await ctx.send(exc_table[exc_class])
         else:
             if ctx.guild:
+                await self.loop.run_in_executor(None, self.sentry.captureException,
+                                                (exc_class, exception, exception.__traceback__))
                 self.logger.error(f"Exception in guild: {ctx.guild.name} | {ctx.guild.id}, shard: {self.shard_id}")
             await super().on_command_error(ctx, exception)
 
@@ -144,10 +162,12 @@ class Bot(commands.Bot):
             await self.mpm.lavalink.links[guild.id].destroy()
 
     async def on_guild_join(self, guild):
-        channel = guild.system_channel or \
-                  next(chan for chan in guild.text_channels if chan.permissions_for(guild.me).send_messages)
+        try:
+            channel = guild.system_channel or \
+                      next(chan for chan in guild.text_channels if chan.permissions_for(guild.me).send_messages)
+        except StopIteration:
+            return
 
         await channel.send(f":tada: Thanks for inviting me to the server! You can get a quick start guide by typing "
                            f"`.help`.\nIf you need any support, you are welcome to join our server by clicking on the "
                            f"link in `.invite`")
-

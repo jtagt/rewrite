@@ -189,8 +189,8 @@ class Music:
     async def stop(self, ctx):
         try:
             mp = self.mpm.get_music_player(ctx, False)
-            await mp.stop()
             await mp.link.disconnect()
+            await mp.stop()
         except:
             pass
         await ctx.send(f"{SUCCESS} The player has been stopped and the bot has disconnected")

@@ -62,7 +62,7 @@ class Info:
     async def links(self, ctx):
         embed = discord.Embed(description=
                           ("[Add to your server](https://discordapp.com/oauth2/authorize"
-                           "?client_id=232916519594491906&scope=bot&permissions=40)\n"
+                           "?client_id=232916519594491906&scope=bot&permissions=8)\n"
                            "[Join Hime's server](https://discord.gg/BCAF7rH)\n"
                            "[Hime's Website](https://himebot.xyz/)\n"
                            "[Hime's Patreon](https://www.patreon.com/himebot)"),

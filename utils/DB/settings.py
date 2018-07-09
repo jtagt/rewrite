@@ -32,4 +32,5 @@ class BotSettings(Settings):
         self.lavaNodes = kwargs.get("lavaNodes")
         self.contributors = kwargs.get("contributors")
         self.ballers = kwargs.get("ballers")
+        self.sentryArgs = kwargs.get("sentryArgs")
         self.patrons = {**self.ballers, **self.contributors}

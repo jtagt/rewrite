@@ -15,7 +15,6 @@ from utils.magma.core import Lavalink, NodeException
 def start_shard_cluster(cluster, **kwargs):
     logging.basicConfig(format="%(levelname)s -- %(name)s.%(funcName)s : %(message)s", level=logging.INFO)
     logging.getLogger("discord").setLevel(logging.ERROR)
-
     logging.getLogger("shard_controller")\
         .info(f"Starting shards: {cluster.shard_ids} in process: {mp.current_process().pid}")
 
@@ -116,7 +115,11 @@ class ShardController:
         while True:
             request = command_queue.get()
             logging.getLogger("shard_controller").info(f"Received command request: {request}")
-            command = self.commands.get(request.pop("action"))
+            command = self.commands.get(request.get("action"))
+            if not command:
+                logging.getLogger("shard_controller").warning(f"Command request {request} is not a command!")
+                continue
+
             command(shard_stats=shard_stats, command_queue=command_queue, **request)
 
 
@@ -132,8 +135,9 @@ def main():
     db = SettingsDB.get_instance()
     bot_settings = loop.run_until_complete(db.get_bot_settings())
     shards = int(sys.argv[1])
-    shard_controller = ShardController(bot_settings, (*range(shards),), shards, shard_p_cluster=1)
-    # start_shard_cluster(ShardCluster([0], shard_controller), shard_stats={}, command_queues={})
+    shard_p_cluster = int(sys.argv[2])
+    shard_controller = ShardController(bot_settings, (*range(shards),), shards, shard_p_cluster=shard_p_cluster)
+    #start_shard_cluster(ShardCluster([37], shard_controller), shard_stats={}, command_queue=[], lockdown_coro=lockdown)
     shard_controller.start_shards(mp_manager)
 
 
