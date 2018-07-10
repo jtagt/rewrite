@@ -1,9 +1,9 @@
-import json
-
 import asyncio
-import aiohttp
+import json
 import logging
-import websockets
+
+import aiohttp
+from aiohttp import ClientConnectorError, WSMsgType
 
 from .events import TrackEndEvent, TrackStuckEvent, TrackExceptionEvent
 from .exceptions import NodeException
@@ -52,15 +52,19 @@ class Node:
         self.uri = uri
         self.rest_uri = rest_uri
         self.headers = headers
-        self.stats = None
+        self.client_session = None
         self.ws = None
+        self.stats = None
         self.available = False
         self.closing = False
 
     async def _connect(self, try_=0):
+        if not self.client_session or self.client_session.closed:
+            self.client_session = aiohttp.ClientSession(headers=self.headers)
+
         try:
-            self.ws = await websockets.connect(self.uri, extra_headers=self.headers)
-        except OSError:
+            self.ws = await self.client_session.ws_connect(self.uri)
+        except ClientConnectorError:
             if try_ < tries:
                 logger.error(f"Connection refused, trying again in {timeout}s, try: {try_+1}/{tries}")
                 await asyncio.sleep(timeout)
@@ -72,47 +76,36 @@ class Node:
         await self._connect()
         await self.on_open()
         asyncio.ensure_future(self.listen())
-        asyncio.ensure_future(self.keep_alive())
 
     async def disconnect(self):
         logger.info(f"Closing websocket connection for node: {self.name}")
         self.closing = True
-        await self.ws.close()
-
-    async def keep_alive(self):
-        """
-        **THIS IS VERY IMPORTANT**
-
-        Lavalink will sometimes fail to recognize the client connection if
-        a ping is not sent frequently. Websockets sends by default, a ping
-        every 5-6 seconds, but this is not enough to maintain the connection.
-
-        This is likely due to the deprecated ws draft: RFC 6455
-        """
-        try:
-            while True:
-                await self.ws.ping()
-                await asyncio.sleep(2)
-        except websockets.ConnectionClosed as e:
-            logger.warning(f"Connection to `{self.name}` was closed! Reason: {e.code}, {e.reason}")
-            self.available = False
-            if self.closing:
-                await self.on_close(e.code, e.reason)
-                return
-
-            try:
-                logger.info(f"Attempting to reconnect `{self.name}`")
-                await self.connect()
-            except NodeException:
-                await self.on_close(e.code, e.reason)
+        self.available = False
+        await self.ws.close(message=f"Closing websocket connection for node: {self.name}")
+        await self.client_session.close()
 
     async def listen(self):
-        try:
-            while True:
-                msg = await self.ws.recv()
-                await self.on_message(json.loads(msg))
-        except websockets.ConnectionClosed:
-            pass  # ping() handles this for us, no need to hear it twice..
+        while True:
+            msg = await self.ws.receive()
+            logger.debug(f"Received websocket message from `{self.name}`: {msg.data}")
+            if msg.type == WSMsgType.text:
+                await self.on_message(json.loads(msg.data))
+                continue
+            elif msg.type in (WSMsgType.closing, WSMsgType.closed, WSMsgType.close):
+                if self.closing:
+                    await self.on_close(1000, "Closing normally")
+                else:
+                    logger.warning(f"Connection to `{self.name}` was closed! Reason: {msg.data}, {msg.extra}")
+                    self.available = False
+
+                    try:
+                        logger.info(f"Attempting to reconnect `{self.name}`")
+                        await self.client_session.close()
+                        await self.connect()
+                    except NodeException:
+                        await self.on_close(msg.data, msg.__dict__.get("extra")
+                                            or "Connection was closed abnormally! Could not reconnect")
+                return
 
     async def on_open(self):
         await self.lavalink.load_balancer.on_node_connect(self)
@@ -132,7 +125,6 @@ class Node:
 
     async def on_message(self, msg):
         # We receive Lavalink responses here
-        logger.debug(f"Received websocket message from `{self.name}`: {msg}")
         op = msg.get("op")
         if op == "playerUpdate":
             link = self.lavalink.get_link(msg.get("guildId"))
@@ -145,18 +137,24 @@ class Node:
             logger.info(f"Received unknown op: {op}")
 
     async def send(self, msg):
-        if not self.ws or not self.ws.open:
+        logger.debug(f"Sending websocket message: `{msg}`")
+        if not self.ws or self.ws.closed:
             self.available = False
             raise NodeException("Websocket is not ready, cannot send message")
-        await self.ws.send(json.dumps(msg))
+
+        try:
+            await self.ws.send_json(msg)
+        except RuntimeError as exception:
+            await self.client_session.close()
+            await self.connect()
+            await self.ws.send_json(msg)
+            raise exception
 
     async def get_tracks(self, query):
         # Fetch tracks from the Lavalink node using its REST API
         params = {"identifier": query}
-        headers = {"Authorization": self.headers["Authorization"]}
-        async with aiohttp.ClientSession(headers=headers) as session:
-            async with session.get(self.rest_uri+"/loadtracks", params=params) as resp:
-                return await resp.json()
+        async with self.client_session.get(self.rest_uri+"/loadtracks", params=params) as resp:
+            return await resp.json()
 
     async def handle_event(self, msg):
         # Lavalink sends us track end event types

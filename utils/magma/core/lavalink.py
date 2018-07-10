@@ -81,8 +81,8 @@ class Lavalink:
         """
         headers = {
             "Authorization": password,
-            "Num-Shards": self.shard_count,
-            "User-Id": self.user_id
+            "Num-Shards": str(self.shard_count),
+            "User-Id": str(self.user_id)
         }
 
         node = Node(self, name, uri, rest_uri, headers)
@@ -151,7 +151,6 @@ class Link:
                         "guildId": data["d"]["guild_id"]
                     }
                     await self.node.send(payload)
-                self.node = None
 
     async def get_tracks(self, query):
         """
