@@ -1,5 +1,7 @@
 import random
 from asyncio import futures
+import requests
+import json
 
 import discord
 from aiohttp import ClientConnectorError
@@ -375,7 +377,30 @@ class Music:
         settings.volume = volume
         await SettingsDB.get_instance().set_guild_settings(settings)
         await ctx.send(f"{SUCCESS} The player volume has been set to `{volume}`")
-
+    
+    @commands.command()
+    async def channel(self, ctx, *, query):
+        #https://www.youtube.com/channel/
+        youtubekey = ""
+        channel = query[31:]
+        r = requests.get(f"https://www.googleapis.com/youtube/v3/channels?part=statistics&id={channel}&key={youtubekey}")
+        data = r.json()
+        #parsing
+        for item in data['items']:
+            count = item['statistics']['subscriberCount']
+            views = item['statistics']['viewCount']
+            videos = item['statistics']['videoCount']
+                     
+        desc = "roblox"
+        embed = discord.Embed(description=desc
+                              colour=COLOR)
+        embed.add_field(name="Subscriber Count",
+                        value=count)
+        embed.add_field(name="View Count",
+                        value=views)
+        embed.add_field(name="Video Count",
+                        value=videos)
+        await ctx.send(embed=embed)
 
 def setup(bot):
     bot.add_cog(Music(bot))
